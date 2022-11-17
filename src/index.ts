@@ -17,52 +17,41 @@ app.use(express.json());
 app.use(cors())
 
 app.get('/', async (req, res) => {
-  const startTime = req.query.startTime||0;
-  const endTime = req.query.endTime||24;
-  const day = req.query.day||"";
+  const startTime = req.query.startTime||10;
+  const endTime = req.query.endTime||11;
+  const day = req.query.day||"sun";
   
   const sections = await sectionRepo.createQueryBuilder("section")
   .where(`days like '%${day}%'`).getMany();
-  const set = new Set<string>(sections.map(section=>section.hall));
-  console.log(set.size)
-  res.json(  getFreeAtTime(10,11,sections));
+  const freeHalls = getFreeAtTime(Number(startTime),Number(endTime),sections);
+
+  console.log(freeHalls.length);
+  res.json(freeHalls);
 })
 
 function getFreeAtTime(startTime:number,endTime:number, sections:Section[]){
-  sections.forEach(section=>{
-    if(section.hall==='g2120' && section.days.includes('wed')){
-      console.log(section.startTime,section.endTime,section.days)
+  const set = new Set<string>(sections.map(section=>section.hall));
+
+  const freeHalls:string[] = [];
+  for(const hall of set){
+    if(hallIsFree(hall,startTime,endTime,sections)){
+      freeHalls.push(hall);
     }
-  })
-//     const mymap = new Map<string,boolean>();
-//     sections.forEach(section=>{
-//       if(mymap.has(section.hall)){
-//         if(mymap.get(section.hall)){
-//           if((section.startTime>=startTime && section.endTime<=endTime) ){
-//             mymap.set(section.hall,false)
-//           }
-//         }
-//       }else{
-//         if((section.startTime>=startTime && section.endTime<=endTime) ){
-//           mymap.set(section.hall,false)
-//         }
-//         else if(section.startTime>=endTime || section.endTime<=startTime){
-//           mymap.set(section.hall,true)
-//         }
-//       }
-//     })
-//     const arr :string[]=[]
-//     mymap.forEach((value,key)=>{console.log("value", value)})
-// console.log(arr.length)
+  }
+  
+  return freeHalls;
 }
 
 function hallIsFree(hall:string,startTime:number,endTime:number, sections:Section[]){
-    
-    sections.forEach(section=>{
-        if(section.startTime>=startTime && section.endTime<=endTime && section.hall===hall){
-            return false;
-        }
-    })
+
+  for(const section of sections){
+      if(section.hall == hall && (section.startTime >= startTime && section.startTime < endTime || section.endTime > startTime && section.endTime <= endTime)){
+        console.log(hall)
+        console.log(section);
+        console.log("====================================");
+        return false;
+      }
+  }
     return true;
 }
 
