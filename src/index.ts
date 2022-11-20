@@ -20,41 +20,47 @@ app.get('/', async (req, res) => {
   const startTime = req.query.startTime||10;
   const endTime = req.query.endTime||11;
   const day = req.query.day||"sun";
-  
   const sections = await sectionRepo.createQueryBuilder("section")
   .where(`days like '%${day}%'`).getMany();
-  const freeHalls = getFreeAtTime(Number(startTime),Number(endTime),sections);
+  console.time("getFreeAtTimeN");
+  const freeHalls = getFreeAtTimeN(Number(startTime),Number(endTime),sections);
+  console.timeEnd("getFreeAtTimeN");
 
   console.log(freeHalls.length);
   res.json(freeHalls);
 })
 
-function getFreeAtTime(startTime:number,endTime:number, sections:Section[]){
-  const set = new Set<string>(sections.map(section=>section.hall));
 
-  const freeHalls:string[] = [];
-  for(const hall of set){
-    if(hallIsFree(hall,startTime,endTime,sections)){
-      freeHalls.push(hall);
-    }
-  }
-  
-  return freeHalls;
+function getFreeAtTimeN(startTime:number,endTime:number, sections:Section[]){
+    const myMap = new Map<string,boolean>();
+    sections.forEach(section=>{
+      if(myMap.has(section.hall)&&myMap.get(section.hall)&& !hallIsFree(startTime,endTime,section)){
+        myMap.set(section.hall,false);
+      }
+      else{
+        if(hallIsFree(startTime,endTime,section)){
+          myMap.set(section.hall,true);
+        }
+        else{
+          myMap.set(section.hall,false);
+        }
+      }
+      
+    })
+    const freeHalls:string[] = [];
+    myMap.forEach((value,key)=>{
+      if(value){
+        freeHalls.push(key);
+      }
+    })
+    return freeHalls;
+
 }
 
-function hallIsFree(hall:string,startTime:number,endTime:number, sections:Section[]){
-
-  for(const section of sections){
-      if(section.hall == hall && (section.startTime >= startTime && section.startTime < endTime || section.endTime > startTime && section.endTime <= endTime)){
-        console.log(hall)
-        console.log(section);
-        console.log("====================================");
-        return false;
-      }
-  }
-    return true;
+function hallIsFree(startTime:number,endTime:number,section :Section){
+  const sectionIsNotFree =  (section.startTime >= startTime && section.startTime < endTime || section.endTime > startTime && section.endTime <= endTime)
+  return !sectionIsNotFree;
 }
 
 app.listen(PORT, () => console.log(`server running on port ${PORT}`));
-
 
