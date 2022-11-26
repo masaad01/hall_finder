@@ -17,26 +17,26 @@ app.use(express.json());
 app.use(cors())
 
 app.get('/', async (req, res) => {
-  const CLOSE_TIME = 20;
+  const CLOSE_TIME = 20; // 8pm (close time)
   const MAX_WAIT_TIME = 15 / 60; // 15 minutes (until hall free)
-  const time = req.query.time || "12:00";
-  const day = req.query.day || "sun";
+  const time = req.query.time || "12:00"; // format: hh:mm
+  const day = req.query.day || "sun"; // format: sun, mon, tue, wed, thu
   const sections = await sectionRepo.createQueryBuilder("section")
     .where(`days like '%${day}%'`).getMany();
   console.time("getFreeAtTimeN");
-  const freeHalls = getFreeAtTimeN(timeFromString(String(time)), sections, MAX_WAIT_TIME);
+  const freeHalls = getFreeHallsAtTime(timeFromString(String(time)), sections, MAX_WAIT_TIME);
   console.timeEnd("getFreeAtTimeN");
 
   console.log(freeHalls.size);
-  const sorted = [...freeHalls.entries()].sort((a, b) => b[1] - a[1]);
+  const sortedfreeHalls = [...freeHalls.entries()].sort((a, b) => b[1] - a[1]);
 
-  const result = sorted.map(([hall, freeDuration]) => {
-    // if (freeDuration === Infinity) {
-    //   freeDuration = CLOSE_TIME - timeFromString(String(time));
-    // }
+  const result = sortedfreeHalls.map(([hall, freeDuration]) => {
+    if (freeDuration === Infinity) {
+      freeDuration = 24;
+    }
     return {
       hall,
-      freeDuration: timeToString(freeDuration) === "Invalid time" ? "for the rest of the day" : timeToString(freeDuration),
+      freeDuration: timeToString(freeDuration),
     };
   });
 
@@ -44,7 +44,15 @@ app.get('/', async (req, res) => {
 })
 
 
-function getFreeAtTimeN(time: number, sections: Section[], maxWaitTime = 0) {
+function getFreeHallsAtTime(time: number, sections: Section[], maxWaitTime = 0) {
+  // time: number (in hours)
+  // sections: Section[]
+  // maxWaitTime: number (in hours)
+  // return: Map<string, number> (key: hall, value: free duration (in hours))
+  // if positive, then hall is free for that duration
+  // else if negative, then hall is busy for that duration
+  // if Infinity, then hall is free until close time
+  // ** assumes sections are valid for that day
   const myMap = new Map<string, number>();
   sections.forEach(section => {
     const freeDuration = hallFreeDuration(time, section);
@@ -65,6 +73,14 @@ function getFreeAtTimeN(time: number, sections: Section[], maxWaitTime = 0) {
 }
 
 function hallFreeDuration(time: number, section: Section) {
+  // time: number (in hours)
+  // section: Section
+  // return: number (in hours)
+  // if positive, then hall is free for that duration (relative to section)
+  // else if negative, then hall is busy for that duration (relative to section)
+  // if Infinity, then hall is free until close time (relative to section)
+  // ** assumes section is valid for that day
+  // ** all results are relative to section
   if (section.startTime > time) {
     return section.startTime - time;
   }
